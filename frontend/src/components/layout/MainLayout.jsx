@@ -1,3 +1,5 @@
+import { Link } from 'react-router-dom'
+
 function MainLayout({ children }) {
   return (
     <div className="min-h-screen flex bg-slate-50">
@@ -7,12 +9,12 @@ function MainLayout({ children }) {
           Personal Notes
         </div>
         <nav className="px-4 space-y-1">
-          <a href="/" className="block px-4 py-2 rounded-lg text-slate-700 hover:bg-slate-100">
+          <Link to="/" className="block px-4 py-2 rounded-lg text-slate-700 hover:bg-slate-100">
             Dashboard
-          </a>
-          <a href="/notes" className="block px-4 py-2 rounded-lg text-slate-700 hover:bg-slate-100">
+          </Link>
+          <Link to="/notes" className="block px-4 py-2 rounded-lg text-slate-700 hover:bg-slate-100">
             Notes
-          </a>
+          </Link>
         </nav>
       </aside>
 
