@@ -1,0 +1,1 @@
+export const DEFAULT_CATEGORIES = ['Personal', 'Study', 'Work', 'Ideas']
