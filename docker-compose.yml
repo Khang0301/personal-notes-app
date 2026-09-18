@@ -1,0 +1,67 @@
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: notesapp-sqlserver
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "Khang123"
+    ports:
+      - "1433:1433"
+    volumes:
+      - sqlserver-data:/var/opt/mssql
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          '/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$$MSSQL_SA_PASSWORD" -C -Q ''SELECT 1'' || exit 1',
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # SQL Server does not auto-create a database on startup (unlike Postgres/MySQL
+  # images). This one-off container creates "notesapp" once SQL Server is
+  # healthy, then exits. The backend waits for it to finish successfully.
+  sqlserver-init:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: notesapp-sqlserver-init
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    environment:
+      DB_PASSWORD: "${DB_PASSWORD}"
+    entrypoint: >
+      bash -c "
+      /opt/mssql-tools18/bin/sqlcmd -S sqlserver -U sa -P \"$$DB_PASSWORD\" -C
+      -Q \"IF NOT EXISTS (SELECT name FROM sys.databases WHERE name = 'notesapp') CREATE DATABASE notesapp\"
+      "
+
+  backend:
+    build:
+      context: ./backend
+    container_name: notesapp-backend
+    depends_on:
+      sqlserver-init:
+        condition: service_completed_successfully
+    environment:
+      DB_URL: "jdbc:sqlserver://sqlserver:1433;databaseName=notesapp;encrypt=true;trustServerCertificate=true"
+      DB_USERNAME: "sa"
+      DB_PASSWORD: "${DB_PASSWORD}"
+      JWT_SECRET: "${JWT_SECRET}"
+      FRONTEND_URL: "${FRONTEND_URL}"
+    ports:
+      - "8080:8080"
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: "${VITE_API_URL}"
+    container_name: notesapp-frontend
+    depends_on:
+      - backend
+    ports:
+      - "5173:80"
+
+volumes:
+  sqlserver-data:

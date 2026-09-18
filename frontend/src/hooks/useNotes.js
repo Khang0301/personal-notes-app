@@ -1,83 +1,83 @@
-import { useState, useEffect } from 'react'
+import { useCallback, useEffect, useState } from 'react'
+import * as noteService from '../services/noteService'
+import { useToast } from '../context/ToastContext'
 
-const STORAGE_KEY = 'notes-app-data'
+/**
+ * Centralizes all note data + CRUD logic for a single "view" (Notes,
+ * Favorites, Pinned, Archive). `filters` decides which notes come back
+ * from the backend; everything else (loading state, error handling,
+ * refresh after each action) lives here so pages only have to render.
+ */
+function useNotes(filters = {}) {
+  const [notes, setNotes] = useState([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState(null)
+  const { showToast } = useToast()
 
-function useNotes() {
-    const [notes, setNotes] = useState(() => {
-        const saved = localStorage.getItem(STORAGE_KEY)
-        return saved ? JSON.parse(saved) : []
-    })
+  const fetchNotes = useCallback(() => {
+    setIsLoading(true)
+    setError(null)
 
-    useEffect(() => {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(notes))
-    }, [notes])
+    noteService
+      .getNotes(filters)
+      .then((res) => setNotes(res.data))
+      .catch(() => setError('Could not load notes. Please try again.'))
+      .finally(() => setIsLoading(false))
+    // Re-run whenever any filter value changes (search text, category, sort...).
+    // JSON.stringify keeps the dependency array stable across renders.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(filters)])
 
-    function addNote({ title, content, category }) {
-        const newNote = {
-        id: crypto.randomUUID(),
-        title,
-        content,
-        category: category || 'Uncategorized',
-        isFavorite: false,
-        isPinned: false,
-        isArchived: false,
-        isDeleted: false,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        }
+  useEffect(() => {
+    fetchNotes()
+  }, [fetchNotes])
 
-    setNotes((prevNotes) => [newNote, ...prevNotes])
-    }
+  async function addNote(data) {
+    await noteService.createNote(data)
+    showToast('Note created')
+    fetchNotes()
+  }
 
-    function updateNote(noteId, updatedData) {
-        setNotes((prevNotes) =>
-            prevNotes.map((note) =>
-            note.id === noteId
-                ? {
-                    ...note,
-                    ...updatedData,
-                    updatedAt: new Date().toISOString(),
-                }
-                : note
-            )
-        )
-    }
-    
-    function deleteNote(noteId) {
-        setNotes((prevNotes) =>
-            prevNotes.filter((note) => note.id !== noteId)
-        )
-    }
+  async function editNote(id, data) {
+    await noteService.updateNote(id, data)
+    showToast('Note updated')
+    fetchNotes()
+  }
 
-    function toggleFavorite(noteId) {
-        setNotes((prevNotes) =>
-            prevNotes.map((note) =>
-            note.id === noteId
-                ? {
-                    ...note,
-                    isFavorite: !note.isFavorite,
-                    updatedAt: new Date().toISOString(),
-                }
-                : note
-            )
-        )
-    }
+  async function removeNote(id) {
+    await noteService.deleteNote(id)
+    showToast('Note moved to trash')
+    fetchNotes()
+  }
 
-    function togglePin(noteId) {
-        setNotes((prevNotes) =>
-            prevNotes.map((note) =>
-            note.id === noteId
-                ? {
-                    ...note,
-                    isPinned: !note.isPinned,
-                    updatedAt: new Date().toISOString(),
-                }
-                : note
-            )
-        )
-    }
+  async function toggleFavorite(id) {
+    await noteService.toggleFavorite(id)
+    fetchNotes()
+  }
 
-  return { notes, addNote, updateNote, deleteNote, toggleFavorite,togglePin, }
+  async function togglePin(id) {
+    await noteService.togglePin(id)
+    fetchNotes()
+  }
+
+  async function toggleArchive(id) {
+    await noteService.toggleArchive(id)
+    showToast('Note archive status updated')
+    fetchNotes()
+  }
+
+  return {
+    notes,
+    isLoading,
+    error,
+    addNote,
+    editNote,
+    removeNote,
+    toggleFavorite,
+    togglePin,
+    toggleArchive,
+    refetch: fetchNotes,
+  }
 }
 
 export default useNotes
